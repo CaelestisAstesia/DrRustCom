@@ -1,0 +1,16 @@
+# --- Rust 标准排除 ---
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# --- IDE 与系统排除 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- 项目特有排除 (极其重要！) ---
+# 永远不要把包含账号密码的配置文件传到 GitHub
+config.toml
+*.log
+/examples/cli_test_output/
