@@ -47,7 +47,7 @@ impl AuthSession {
         }
     }
 
-    /// 内部助手：确保网络客户端已初始化
+    /// 内部方法：确保网络客户端已初始化
     async fn ensure_network(&mut self) -> Result<()> {
         if self.network.is_none() {
             let net = NetworkClient::connect(
