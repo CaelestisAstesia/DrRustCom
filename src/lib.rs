@@ -9,6 +9,7 @@ pub mod protocol;
 pub mod state;
 pub mod session;
 
-pub use error::{AuthErrorCode, DrcomError};
-pub use state::{CoreStatus, DrcomState};
+pub use config::DrcomConfig;
 pub use session::AuthSession;
+pub use state::{CoreStatus, DrcomState};
+pub use error::{AuthErrorCode, DrcomError};

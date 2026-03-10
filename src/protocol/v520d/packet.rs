@@ -33,7 +33,7 @@ fn encode_and_pad(s: &str, max_len: usize) -> Vec<u8> {
 /// ### 参数
 /// * `padding`: 15 字节的填充数据，通常基于协议版本标识
 pub fn build_challenge_request(padding: &[u8; 15]) -> Vec<u8> {
-    trace!("正在构造 Challenge 请求报文...");
+    trace!("正在构造 Challenge 请求数据包...");
     let rand_val: u64 = 0x0f + (rand::random::<u16>() % (0xff - 0x0f + 1)) as u64;
     let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
@@ -78,7 +78,7 @@ pub fn parse_challenge_response(data: &[u8]) -> Option<[u8; 4]> {
 /// * `config`: 包含用户凭据与环境指纹的配置对象
 /// * `salt`: 从 Challenge 阶段获得的 4 字节盐值
 pub fn build_login_packet(config: &DrcomConfig, salt: &[u8; 4]) -> Vec<u8> {
-    debug!("开始构造登录认证大包...");
+    debug!("开始构造登录认证数据包...");
     let usr_padded = encode_and_pad(&config.username, USERNAME_MAX_LEN);
     let pwd_bytes = config.password.as_bytes();
     let mut pkt = Vec::with_capacity(350);
@@ -164,7 +164,7 @@ pub fn build_login_packet(config: &DrcomConfig, salt: &[u8; 4]) -> Vec<u8> {
     let rnd_tail: [u8; 2] = rand::random();
     pkt.extend_from_slice(&rnd_tail);
 
-    debug!(len = pkt.len(), "登录认证包构造完成");
+    debug!(len = pkt.len(), "登录认证数据包构造完成");
     pkt
 }
 
@@ -275,7 +275,7 @@ pub fn parse_keep_alive2_response(data: &[u8]) -> Option<[u8; 4]> {
 
 /// 构建注销请求报文 (0x06)
 pub fn build_logout_packet(config: &DrcomConfig, salt: &[u8; 4], auth_info: &[u8; 16]) -> Vec<u8> {
-    debug!("正在构造注销报文...");
+    debug!("正在构造注销请求数据包...");
     let pwd_bytes = config.password.as_bytes();
     let mut pkt = Vec::with_capacity(80);
 

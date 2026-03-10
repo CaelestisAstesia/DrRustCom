@@ -198,7 +198,7 @@ impl AuthSession {
         if let Some(network) = &self.network {
             let strategy = Strategy520D::new(&self.config, network, self.state.clone());
             if let Err(e) = strategy.logout().await {
-                warn!(error = ?e, "服务器注销请求发送失败 (可能已提前离线)");
+                warn!(error = ?e, "服务器注销请求发送失败 (可能已离线)");
             }
         }
 
