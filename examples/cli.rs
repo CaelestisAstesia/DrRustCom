@@ -2,25 +2,42 @@ use drrustcom::{AuthSession, CoreStatus, DrcomConfig};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use std::env; // 新增：用于获取当前程序路径
-use std::io::{self, Read}; // 新增：用于防止控制台闪退
+use std::env;
+use std::io::{self, Read};
 use tokio::signal;
 use tokio::time::{self, Duration};
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter, Layer};
 
-// ... status_to_cn 函数保持不变
+/// 仅在应用层定义的映射函数，将状态枚举转换为中文描述
+fn status_to_cn(status: CoreStatus) -> &'static str {
+    match status {
+        CoreStatus::Idle => "闲置",
+        CoreStatus::Connecting => "连接中",
+        CoreStatus::LoggedIn => "已登录",
+        CoreStatus::Heartbeat => "在线保活",
+        CoreStatus::Offline => "离线",
+        CoreStatus::Error => "错误",
+    }
+}
+
+/// 辅助函数：在终端等待按键后退出，解决双击运行时闪退问题
+fn pause_exit() {
+    println!("\n按任意键退出程序...");
+    let mut _unused = [0u8; 1];
+    let _ = io::stdin().read(&mut _unused);
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 1. 获取程序运行目录，确保双击时能找到同级目录的 config.toml
+    // 1. 获取程序运行目录
     let exe_path = env::current_exe()?;
     let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
     let config_path = exe_dir.join("config.toml");
 
-    // 2. 日志配置：将日志文件也放在程序同级目录
+    // 2. 日志配置：将日志存放在程序同级目录的 logs 文件夹下
     let log_dir = exe_dir.join("logs");
-    std::fs::create_dir_all(&log_dir)?;
+    let _ = std::fs::create_dir_all(&log_dir);
     let file_appender = tracing_appender::rolling::daily(log_dir, "drcom_debug.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
@@ -31,12 +48,12 @@ async fn main() -> anyhow::Result<()> {
 
     info!("=== Dr.COM Rust Client (Release Build) ===");
 
-    // 3. 加载配置：使用识别到的绝对路径
+    // 3. 加载配置并校验
     let config = match DrcomConfig::from_toml_file(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            error!("加载配置文件失败: {}. 请确保 '{}' 存在于程序同级目录。", e, config_path.display());
-            pause_exit(); // 报错后等待按键，防止闪退
+            error!("加载配置文件失败: {}. 请确保 'config.toml' 存在于程序同级目录。", e);
+            pause_exit();
             return Ok(());
         }
     };
@@ -46,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     let mut session = AuthSession::new(config);
     let mut status_rx = session.status_rx.clone();
 
-    // 4. 状态监听任务 (逻辑保持不变)
+    // 4. 状态监听任务
     let hb_count_clone = Arc::clone(&heartbeat_count);
     tokio::spawn(async move {
         while status_rx.changed().await.is_ok() {
@@ -54,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
                 let data = status_rx.borrow();
                 (data.0, data.1.clone())
             };
-            let status_cn = status_to_cn(status);
+            let status_cn = status_to_cn(status); // 现在可以找到该函数了
             match status {
                 CoreStatus::Offline | CoreStatus::Error => error!("状态异常: {} - {}", status_cn, msg),
                 _ => info!("当前状态: [{}] -> {}", status_cn, msg),
@@ -62,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // 5. 执行登录与循环
+    // 5. 执行登录与脉冲循环
     match session.login().await {
         Ok(_) => {
             info!("认证成功，正在保持连接...");
@@ -88,18 +105,11 @@ async fn main() -> anyhow::Result<()> {
             session.stop().await;
         }
         Err(e) => {
-            error!("登录彻底失败: {}", e);
+            error!("认证彻底失败: {}", e);
         }
     }
 
-    info!("程序即将退出。");
+    info!("程序已停止。");
     pause_exit();
     Ok(())
-}
-
-/// 辅助函数：在终端等待按键后退出，解决双击运行时闪退问题
-fn pause_exit() {
-    println!("\n按任意键退出程序...");
-    let mut _unused = [0u8; 1];
-    let _ = io::stdin().read(&mut _unused);
 }
