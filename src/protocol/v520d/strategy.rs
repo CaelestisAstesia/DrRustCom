@@ -141,25 +141,30 @@ impl<'a> Strategy520D<'a> {
     pub async fn keep_alive(&self) -> Result<()> {
         trace!("开始执行保活序列...");
 
-        // 1. KA1 (0xFF)
+        // 在执行前确认状态，确保不会在重试过程中被其他逻辑干扰
+        // 这里的 with_retry 已经包含了内部重试逻辑
         self.with_retry("KA1", || self._perform_ka1_step()).await?;
 
-        // 2. KA2 (0x07) 序列控制
-        let initialized = self.state.read().unwrap().ka2_initialized;
+        let is_init_needed = {
+            let st = self.state.read().unwrap();
+            !st.ka2_initialized
+        };
 
-        if !initialized {
+        if is_init_needed {
             debug!("初始化 KA2 序列 (1-1-3)...");
+            // 每一个步骤都受 with_retry 保护
             self.with_retry("KA2-I1", || self._perform_ka2_step(1, true)).await?;
             self.with_retry("KA2-I2", || self._perform_ka2_step(1, false)).await?;
             self.with_retry("KA2-I3", || self._perform_ka2_step(3, false)).await?;
-            self.state.write().unwrap().ka2_initialized = true;
+
+            let mut st = self.state.write().unwrap();
+            st.ka2_initialized = true;
         } else {
             trace!("标准 KA2 循环 (1-3)...");
             self.with_retry("KA2-L1", || self._perform_ka2_step(1, false)).await?;
             self.with_retry("KA2-L3", || self._perform_ka2_step(3, false)).await?;
         }
 
-        trace!("保活序列执行成功");
         Ok(())
     }
 

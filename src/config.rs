@@ -164,7 +164,27 @@ impl DrcomConfig {
             DrcomError::Config(msg)
         })?;
 
+        config.validate_basic_fields()?;
+
         info!("成功从 {:?} 加载配置，用户: {}", path_ref, config.username);
         Ok(config)
+    }
+    /// 校验关键字符串字段是否仅包含 ASCII 字符
+    /// 防止因 UTF-8 与 GBK 编码长度差异导致的协议包错位
+    fn validate_basic_fields(&self) -> Result<()> {
+        let fields = [
+            ("username", &self.username),
+            ("host_name", &self.host_name),
+            ("host_os", &self.host_os),
+        ];
+
+        for (name, value) in fields {
+            if !value.is_ascii() {
+                let msg = format!("配置错误: 字段 '{}' 包含非 ASCII 字符。为了保证协议字节对齐，请仅使用英文字母、数字或符号。", name);
+                error!("{}", msg);
+                return Err(DrcomError::Config(msg));
+            }
+        }
+        Ok(())
     }
 }

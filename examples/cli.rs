@@ -19,40 +19,37 @@ fn status_to_cn(status: CoreStatus) -> &'static str {
     }
 }
 
+// ... 前面部分保持不变 (status_to_cn 函数和日志初始化)
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 1. 双图层日志配置
+    // 1. 日志配置 (保持原样)
     let file_appender = tracing_appender::rolling::never(".", "debug.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
-    // 控制台图层：只看 INFO
-    let stdout_layer = fmt::layer()
-        .with_writer(std::io::stdout)
-        .with_filter(EnvFilter::new("info"));
+    let stdout_layer = fmt::layer().with_writer(std::io::stdout).with_filter(EnvFilter::new("info"));
+    let file_layer = fmt::layer().with_writer(non_blocking).with_ansi(false).with_filter(EnvFilter::new("debug"));
 
-    // 文件图层：记录 DEBUG 细节
-    let file_layer = fmt::layer()
-        .with_writer(non_blocking)
-        .with_ansi(false)
-        .with_filter(EnvFilter::new("debug"));
-
-    tracing_subscriber::registry()
-        .with(stdout_layer)
-        .with(file_layer)
-        .init();
+    tracing_subscriber::registry().with(stdout_layer).with(file_layer).init();
 
     info!("=== Dr.COM Rust Debug Monitor (Controlled Pulse Mode) ===");
 
-    // 实时统计数据
     let heartbeat_count = Arc::new(AtomicU64::new(0));
     let start_time = Instant::now();
 
-    // 加载配置并初始化会话
-    let config = DrcomConfig::from_toml_file("config.toml")?;
+    // 2. 加载配置：这里现在会自动触发 validate_basic_fields 校验
+    let config = match DrcomConfig::from_toml_file("config.toml") {
+        Ok(c) => c,
+        Err(e) => {
+            error!("配置文件加载失败: {}", e); // 这里会打印 ASCII 校验失败的具体字段
+            return Err(e.into());
+        }
+    };
+
     let mut session = AuthSession::new(config);
     let mut status_rx = session.status_rx.clone();
 
-    // 2. 状态监听任务：负责在状态变更时输出日志
+    // 3. 状态监听任务 (保持原样)
     let hb_count_clone = Arc::clone(&heartbeat_count);
     tokio::spawn(async move {
         while status_rx.changed().await.is_ok() {
@@ -60,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
                 let data = status_rx.borrow();
                 (data.0, data.1.clone())
             };
-
             let status_cn = status_to_cn(status);
             match status {
                 CoreStatus::Offline | CoreStatus::Error => {
@@ -71,23 +67,22 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // 3. 执行登录与脉冲循环
+    // 4. 执行登录与脉冲循环
     match session.login().await {
         Ok(_) => {
             info!("登录成功。进入 20s 周期循环...");
-
             let mut interval = time::interval(Duration::from_secs(20));
 
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        // 发射一次脉冲（内置自动重试补偿）
+                        // 现在 AuthSession::pulse 内部自带防重入逻辑
+                        // 如果上一个 pulse 还没结束，它会打印 warn 并直接返回 Ok(())
                         if let Err(e) = session.pulse().await {
                             error!("脉冲彻底中断: {}", e);
                             break;
                         }
 
-                        // 更新并显示实时统计
                         let count = hb_count_clone.fetch_add(1, Ordering::SeqCst) + 1;
                         let uptime = start_time.elapsed();
 
@@ -104,8 +99,6 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-
-            // 注销并清理
             session.stop().await;
             info!("测试结束。总挂机时长: {:?}", start_time.elapsed());
         }
@@ -113,6 +106,5 @@ async fn main() -> anyhow::Result<()> {
             error!("初始认证失败: {}", e);
         }
     }
-
     Ok(())
 }

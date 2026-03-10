@@ -1,12 +1,11 @@
 # DrRustCom
 
 现代化、高性能、并发安全的 Dr.COM 认证协议 Rust 实现核心库。
+为了更好的跨平台兼容和性能而对Python版实现进行了重写。
+目前仍在测试阶段，目前发现的可能BUG有以下几点：
+    1.这个版本全面弃用了GBK编码支持，我想不到什么情况下能够输入ASCII以外的字符进去，做了一个简单的检查
+    2.
 
-## 特性
-- **100% 对齐**: 严格复刻 Python实现的Drcom-Core，字节级对齐。
-- **并发安全**: 基于 Tokio 与 Arc/RwLock 设计，原生支持异步调用与状态订阅。
-- **强类型配置**: 使用 Serde 自动解析与校验配置文件，杜绝非法输入。
-- **轻量化**: 极低的 CPU 与内存占用，适合嵌入式或路由器环境。
 
 ## 快速开始
 
@@ -18,21 +17,9 @@ tokio = { version = "1.0", features = ["full"] }
 
 ```
 
-使用示例:
+使用示例:见examples内的cli.rs
 
-```rust
-use drrustcom::{DrcomConfig, AuthSession};
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = DrcomConfig::from_toml_file("config.toml")?;
-    let mut session = AuthSession::new(config);
-
-    session.login().await?;
-    session.start_heartbeat();
-
-    // ... 你的应用逻辑
-    Ok(())
-}
-
+运行示例：在根目录执行
+```
+cargo run --example cli
 ```
